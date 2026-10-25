@@ -6681,14 +6681,16 @@ window.addEventListener('message', e => {
     if (f.contentWindow !== e.source) continue;
     if (d?.event === 'onReady' || d?.event === 'initialDelivery') g.ready = true;
     if (d?.event === 'onError') { g.err = d.info; ytFail(f, g); }
-    if (d?.info && d.info.playerState != null) { g.ready = true; const prev = g.state; g.state = d.info.playerState; if (prev !== g.state) g.onState?.(g.state); }
+    const ps = d?.event === 'onStateChange' && typeof d.info === 'number' ? d.info : (d?.info && d.info.playerState != null ? d.info.playerState : null);
+    if (ps != null) { g.ready = true; const prev = g.state; g.state = ps; if (prev !== g.state) g.onState?.(g.state); }
   }
 });
 function ytGuard(f, url, opts = {}) {
   const g = Object.assign({ ready: false, state: -1, err: null, url }, opts);
   YTG.set(f, g);
-  const listen = () => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'sim' + uid(), channel: 'widget' }), '*'); } catch (e) { } };
-  f.addEventListener('load', () => { listen(); setTimeout(listen, 800); });
+  const gid = 'sim' + uid();
+  const listen = () => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: gid, channel: 'widget' }), '*'); f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'], id: gid, channel: 'widget' }), '*'); } catch (e) { } };
+  f.addEventListener('load', () => { listen(); let n = 0; const iv = setInterval(() => { if (!f.isConnected || ++n > 15) { clearInterval(iv); return; } listen(); }, 1000); });
   setTimeout(() => {
     if (!f.isConnected) { YTG.delete(f); return; }
     if (!g.ready || g.err) ytFail(f, g);
@@ -6774,7 +6776,7 @@ function vbPlace() {
   if (VB.key !== key) {
     vbClear(); VB.key = key;
     vbHold();
-    if (k === 'yt') { const f = ytIframe(ytId(src), { mute: 0, controls: 1 }); box.appendChild(f); ytGuard(f, src, { onState: st => { if (st === 1) vbHold(); else if (st === 0 || st === 2) vbResume(); } }); }
+    if (k === 'yt') { const f = ytIframe(ytId(src), { mute: 0, controls: 1 }); box.appendChild(f); ytGuard(f, src, { onState: st => { if (st === 1) vbHold(); else if (st === 0 || st === 2) vbResume(); }, onFail: vbResume }); }
     else {
       const v = document.createElement('video');
       v.src = src; v.controls = true;
